@@ -38,6 +38,7 @@
 #include "citra_qt/multiplayer/host_room.h"
 #include "citra_qt/multiplayer/lobby.h"
 #include "citra_qt/multiplayer/message.h"
+#include "citra_qt/stereoscopic_controller.h"
 #include "citra_qt/ui_settings.h"
 #include "citra_qt/updater/updater.h"
 #include "citra_qt/util/clickable_label.h"
@@ -55,6 +56,7 @@
 #include "core/gdbstub/gdbstub.h"
 #include "core/loader/loader.h"
 #include "core/settings.h"
+#include "video_core/video_core.h"
 
 #ifdef QT_STATICPLUGIN
 Q_IMPORT_PLUGIN(QWindowsIntegrationPlugin);
@@ -237,6 +239,14 @@ void GMainWindow::InitializeDebugWidgets() {
 
     QMenu* debug_menu = ui.menu_View_Debugging;
 
+    stereoscopicControllerWidget = new StereoscopicControllerWidget(this);
+    addDockWidget(Qt::LeftDockWidgetArea, stereoscopicControllerWidget);
+    stereoscopicControllerWidget->setFloating(true);
+    connect(this, &GMainWindow::EmulationStarting, stereoscopicControllerWidget,
+            &StereoscopicControllerWidget::OnEmulationStarting);
+    connect(this, &GMainWindow::EmulationStopping, stereoscopicControllerWidget,
+            &StereoscopicControllerWidget::OnEmulationStopping);
+
 #if MICROPROFILE_ENABLED
     microProfileDialog = new MicroProfileDialog(this);
     microProfileDialog->hide();
@@ -289,6 +299,9 @@ void GMainWindow::InitializeDebugWidgets() {
             &WaitTreeWidget::OnEmulationStarting);
     connect(this, &GMainWindow::EmulationStopping, waitTreeWidget,
             &WaitTreeWidget::OnEmulationStopping);
+
+    ui.menu_Emulation->addSeparator();
+    ui.menu_Emulation->addAction(stereoscopicControllerWidget->toggleViewAction());
 }
 
 void GMainWindow::InitializeRecentFileMenuActions() {
@@ -400,6 +413,12 @@ void GMainWindow::ConnectWidgetEvents() {
     connect(game_list, &GameList::OpenSaveFolderRequested, this,
             &GMainWindow::OnGameListOpenSaveFolder);
 
+    connect(stereoscopicControllerWidget, SIGNAL(DepthChanged(float)), this,
+            SLOT(OnDepthChanged(float)));
+    connect(stereoscopicControllerWidget,
+            SIGNAL(StereoscopeModeChanged(EmuWindow::StereoscopicMode)), this,
+            SLOT(OnStereoscopeModeChanged(EmuWindow::StereoscopicMode)));
+
     connect(this, &GMainWindow::EmulationStarting, render_window,
             &GRenderWindow::OnEmulationStarting);
     connect(this, &GMainWindow::EmulationStopping, render_window,
@@ -456,6 +475,14 @@ void GMainWindow::ConnectMenuEvents() {
             &GMainWindow::OnCheckForUpdates);
     connect(ui.action_Open_Maintenance_Tool, &QAction::triggered, this,
             &GMainWindow::OnOpenUpdater);
+}
+
+void GMainWindow::OnDepthChanged(float v) {
+    VideoCore::g_emu_window->DepthSliderChanged(v);
+}
+
+void GMainWindow::OnStereoscopeModeChanged(EmuWindow::StereoscopicMode mode) {
+    VideoCore::g_emu_window->StereoscopicModeChanged(mode);
 }
 
 void GMainWindow::OnDisplayTitleBars(bool show) {
